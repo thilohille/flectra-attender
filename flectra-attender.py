@@ -1,14 +1,13 @@
 #/usr/bin/python
 import signal
 import sys
-from time import sleep
-import json
-import time
 from io import StringIO
+import copy
+import time
+import json
 from flectraclient_rpc import FlectraClient
 from shutil import copyfile
-from wifiscanner import WifiScanner
-import copy
+from wifiscanner import WifiScanner,WifiScannerCrash
 
 
 DEBUG = False
@@ -32,24 +31,37 @@ cfgsave = copy.deepcopy(cfg)
 flag_config_changed = False
 try:
     for i in cfg["user"]:
-        sleep(0.1)
+        time.sleep(0.1)
         scanner.clearRxBuffer()
 
         try:
             b = cfg["user"][i]["password"]
         except:
+            debug(len(cfg["user"][i]["password-encrypted"].strip()))
+            if len(cfg["user"][i]["password-encrypted"].strip()) % 4 != 0:
+                print(i + ": encrypted password is not base64, removing user: " + cfg["user"][i]["username"])
+                cfg["user"][i]["active"] = False
+                continue
             scanner.sendCmd("decrypt",[cfg["user"][i]["password-encrypted"]])
-            cfg["user"][i]["password"] = scanner.read()
-            debug(i + ": " + cfg["user"][i]["password"])
+            try:
+                cfg["user"][i]["password"] = scanner.read()
+                cfg["user"][i]["active"] = True
+                debug(i + ": " + cfg["user"][i]["password"])
+            except (UnicodeDecodeError):
+                debug(i + ": could not decrypt password, removing user: " + cfg["user"][i]["username"])
+                cfg["user"][i]["active"] = False
+                
         try:
             b = cfg["user"][i]["password-encrypted"]
         except:
             scanner.sendCmd("encrypt",[cfg["user"][i]["password"]])
             cfg["user"][i]["password-encrypted"] = scanner.read()
+            cfg["user"][i]["active"] = True
             debug(i + ": " + cfg["user"][i]["password-encrypted"])
             cfgsave["user"][i]["password-encrypted"] = cfg["user"][i]["password-encrypted"]
             del(cfgsave["user"][i]["password"])
             flag_config_changed = True
+    
 except (SystemExit):
     print("exiting")
     scanner.sendCmd("stopscan",ack=True)
@@ -81,12 +93,12 @@ while True:
         line = scanner.read()
         debug(line)
         if len(line) == 0:
-            sleep(0.2)
+            time.sleep(0.2)
             continue
         try:
             obj = json.loads(line)
             #do we have a known mac-address?
-            if (obj["m"] in cfg["user"]):
+            if (obj["m"] in cfg["user"] and  cfg["user"][obj["m"]]["active"]):
                 #check if we have the record in memory, if not create it
                 try:
                     mydata = data[obj['m']]
@@ -122,7 +134,7 @@ while True:
                     print("Warning: unable to checkout!")
                 debug(data[i])
                 del data[i]
-        sleep(0.02)
+        time.sleep(0.02)
     except (SystemExit):
         print("exiting")
         scanner.sendCmd("stopscan",ack=True)

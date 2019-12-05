@@ -46,12 +46,19 @@ class WifiScanner:
     def read(self):
         debug("read start")
         line = self.ser.readline().decode("utf-8").rstrip()
-        debug(line.rstrip('\0'))
+        line = line.rstrip('\0')
+        if (line[:22] == "Guru Meditation Error:"):
+            raise WifiScannerCrash(line[23:])
+        debug("read: "+line.rstrip('\0'))
         debug("read done")
-        return line.rstrip('\0')
-
+        return line
+        
     def close(self):
         debug("close start")
          # serial close port
         self.ser.close()
         debug("close done")
+
+
+class WifiScannerCrash(Exception):
+    pass
