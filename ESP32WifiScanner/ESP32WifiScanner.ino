@@ -74,13 +74,6 @@ void sniffer(void* buf, wifi_promiscuous_pkt_type_t type) { //This is where pack
   for (int i = 8; i <= 8 + 6 + 1; i++) { // This reads the first couple of bytes of the packet. This is where you can read the whole packet replaceing the "8+6+1" with "p->rx_ctrl.sig_len"
     packet += String(p->payload[i], HEX);
   }
-  /*for(int i=8;i<=8+6+1;i++){
-    Serial.print(String(p->payload[i],HEX)+":"+p->payload[i]+"-");
-    }
-    Serial.println();*/
-  /*for(int i=8;i<=p->rx_ctrl.sig_len;i++){ // This reads the first couple of bytes of the packet. This is where you can read the whole packet replaceing the "8+6+1" with "p->rx_ctrl.sig_len"
-     fullpacket += String(p->payload[i],HEX);
-    }*/
   for (int i = 4; i <= 15; i++) { // This removes the 'nibble' bits from the stat and end of the data we want. So we only get the mac address.
     mac += String(packet[i]);
   }
@@ -88,11 +81,7 @@ void sniffer(void* buf, wifi_promiscuous_pkt_type_t type) { //This is where pack
   signed int rssi = p->rx_ctrl.rssi;
   //Serial.println(fullpacket);
   mac.toUpperCase();
-  /*for (int z=0; z<mac.length(); z++){
-    if (int(mac[z]) == 0){
-      mac.setCharAt(z, 'X');
-    }
-    }*/
+
   int newmac = 1;
   for (int i = 0; i < listcount; i++) { // checks if the MAC address has been added before
     if (mac == maclist[i][0]) {
@@ -106,9 +95,6 @@ void sniffer(void* buf, wifi_promiscuous_pkt_type_t type) { //This is where pack
   }
 
   if (newmac == 1) { // If its new. add it to the array.
-    /*Serial.print(mac);
-      Serial.print(":");
-      Serial.println(rssi);*/
     maclist[listcount][0] = mac;
     maclist[listcount][3] = rssi;
     maclist[listcount][1] = defaultTTL;
@@ -133,28 +119,9 @@ void setup() {
   /* setup wifi */
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   esp_wifi_init(&cfg);
-  /*esp_wifi_set_storage(WIFI_STORAGE_RAM);
-    esp_wifi_set_mode(WIFI_MODE_NULL);
-    esp_wifi_start();*/
-  // modified
   esp_wifi_set_storage(WIFI_STORAGE_RAM);
   esp_wifi_set_mode(WIFI_MODE_STA);
   esp_wifi_start();
-  /*wifi_config_t wifi_config = {
-      .sta = {
-          .ssid = CONFIG_ESP_WIFI_SSID1,
-          .password = CONFIG_ESP_WIFI_PASSWORD1
-      },
-    };*/
-  /*
-    wifi_config_t sta_config = { };
-    strcpy((char*) sta_config.sta.ssid,CONFIG_ESP_WIFI_SSID1);
-    strcpy((char*) sta_config.sta.password,CONFIG_ESP_WIFI_PASSWORD1);
-    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &sta_config));
-    ESP_LOGI(TAG, "Connect to %s.", wifi_config.sta.ssid);
-    ESP_ERROR_CHECK(esp_wifi_connect());
-  */
-  // done
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_promiscuous_filter(&filt);
   esp_wifi_set_promiscuous_rx_cb(&sniffer);
@@ -168,7 +135,6 @@ void setup() {
   char * key = AES_KEY;
   cipher->setKey(key);
 
-  //Serial.println("starting!");
 }
 
 size_t outputLength;
@@ -210,13 +176,11 @@ void loop() {
     else if (cmd == "encrypt") {
       String encrypted = b.encode(cipher->encryptString(value));
       Serial.println(encrypted);
-      //Serial.println(encrypted);
     }
     else if (cmd == "decrypt") {
       int bufferlen = value.length();
       char decodebuffer[bufferlen]; // half may be enough
       sprintf(decodebuffer, "%s", value.c_str());
-      //Serial.println(decodebuffer);
       unsigned char * decoded = base64_decode((const unsigned char *) decodebuffer, bufferlen, &outputLength);
       sprintf(decodebuffer, "%s", decoded);
       String decrypted = cipher->decryptString(decodebuffer);
@@ -224,6 +188,7 @@ void loop() {
       decrypted = "";
       bufferlen = 0;
       free(decoded);
+      //this free causes heap corruption, maybe due to the use base64 and crypto/base64.h?
       //free(decodebuffer);
     }
   }
