@@ -1,0 +1,13 @@
+{
+    "serial": {
+            "port": "/dev/ttyUSB0",
+            "baudrate": 115200
+        },
+    "flectra" : {
+            "url": "http://localhost:7073",
+            "db": "flectra"
+        },
+    "user": {
+        "8874BE5671E" : {"username" : "demo","password" : "demo", "checkout-trigger-seconds" : 100}
+    }
+}
