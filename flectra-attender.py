@@ -8,14 +8,16 @@ import json
 from flectraclient_rpc import FlectraClient
 from shutil import copyfile
 from wifiscanner import WifiScanner,WifiScannerCrash
+import logging
 
+DEBUG = True
 
-DEBUG = False
-
-def debug(data):
-    if DEBUG:
-        print(data, flush=True)
-
+if DEBUG:
+    #logging.basicConfig( level=logging.DEBUG, filename='flectra-attender.log')
+    logging.basicConfig( level=logging.DEBUG)    
+else:
+    #logging.basicConfig( level=logging.INFO, filename='flectra-attender.log')
+    logging.basicConfig( level=logging.INFO)    
 
 with open('config.json') as json_data_file:
     cfg = json.load(json_data_file)
@@ -26,7 +28,7 @@ data = {}
 lasttimestamp = time.time()
 
 scanner.sendCmd("stopscan",ack=True)
-
+logging.info("reading config.json")
 cfgsave = copy.deepcopy(cfg)
 flag_config_changed = False
 try:
@@ -37,18 +39,17 @@ try:
         try:
             b = cfg["user"][i]["password"]
         except:
-            debug(len(cfg["user"][i]["password-encrypted"].strip()))
             if len(cfg["user"][i]["password-encrypted"].strip()) % 4 != 0:
-                print(i + ": encrypted password is not base64, removing user: " + cfg["user"][i]["username"])
+                logging.warning(i + ": encrypted password is not base64, removing user: " + cfg["user"][i]["username"])
                 cfg["user"][i]["active"] = False
                 continue
             scanner.sendCmd("decrypt",[cfg["user"][i]["password-encrypted"]])
             try:
                 cfg["user"][i]["password"] = scanner.read()
                 cfg["user"][i]["active"] = True
-                debug(i + ": " + cfg["user"][i]["password"])
+                logging.debug(i + ": " + cfg["user"][i]["password"])
             except (UnicodeDecodeError):
-                debug(i + ": could not decrypt password, removing user: " + cfg["user"][i]["username"])
+                logging.debug(i + ": could not decrypt password, removing user: " + cfg["user"][i]["username"])
                 cfg["user"][i]["active"] = False
                 
         try:
@@ -57,44 +58,47 @@ try:
             scanner.sendCmd("encrypt",[cfg["user"][i]["password"]])
             cfg["user"][i]["password-encrypted"] = scanner.read()
             cfg["user"][i]["active"] = True
-            debug(i + ": " + cfg["user"][i]["password-encrypted"])
+            logging.debug(i + ": " + cfg["user"][i]["password-encrypted"])
             cfgsave["user"][i]["password-encrypted"] = cfg["user"][i]["password-encrypted"]
             del(cfgsave["user"][i]["password"])
             flag_config_changed = True
     
 except (SystemExit):
-    print("exiting")
+    logging.info("exiting")
     scanner.sendCmd("stopscan",ack=True)
     scanner.close()
     sys.exit(0)
 
 scanner.clearRxBuffer()
-debug(cfg["user"])
+logging.debug(cfg["user"])
 
 #do we have a a changed configuration?
 if (flag_config_changed):
-    debug("saving configuration") 
     #copy config file before replaceing it
-    copyfile('config.json', 'config.json-backup')
+    if (DEBUG):
+        print("coping config.json -> config.json-backup")
+        copyfile('config.json', 'config.json-backup')
     #create formatted json from cfgsave 
     formattedconfig = json.dumps(cfgsave,indent=4, separators=(',', ': '))
     #write it to config.json
+    print("new passwords found, saving configuration") 
     file = open("config.json","w") 
     file.write(formattedconfig)
     file.close
 
 #tell device to start sending data
 #handle shutdown
-
+logging.info("starting wifi-scanner") 
 scanner.sendCmd("startscan",ack=True)
+logging.info("now scanniing....") 
 
 while True:
     try:
         line = scanner.read()
-        debug(line)
         if len(line) == 0:
             time.sleep(0.2)
             continue
+        logging.debug(line)
         try:
             obj = json.loads(line)
             #do we have a known mac-address?
@@ -103,40 +107,42 @@ while True:
                 try:
                     mydata = data[obj['m']]
                 except:
+                    scanner.sendCmd("checkin",ack=True)
                     data[obj['m']] = {'lasttimestamp' : time.time(), "cfg" : cfg["user"][obj['m']]}
                     mydata = data[obj['m']]
                     #checkin flectra
-                    print(obj['m'] + ": checkin", flush=True)
+                    print(obj['m'] + ": checkin user " + data[obj['m']]["cfg"]["username"], flush=True)
                     try:
                         flc = FlectraClient(data[obj['m']]["cfg"]["username"], data[obj['m']]["cfg"]["password"])
                         res = flc.attendance_checkin()
                     except:
-                        print("Warning: unable to checkin!")
+                        logging.warning("Warning: unable to checkin!")
                 obj['time'] = time.asctime( time.localtime(time.time()) )
-                debug(data[obj['m']])
+                logging.debug(data[obj['m']])
             else:
                 #print("ignored mac " + obj['m'])
                 pass
         except json.decoder.JSONDecodeError:
-            print("jsonerrror: " + line)
+            logging.warning("jsonerrror: " + line)
             pass
         except:
             raise
         for i in data.copy():
             #user expired?
             if (time.time()-data[i]['lasttimestamp'] > data[i]["cfg"]["checkout-trigger-seconds"]):
-                print(i + ": checkout", flush=True)
+                scanner.sendCmd("checkout",ack=True)
+                logging.info(i + ": checkout user " + data[i]["cfg"]["username"], flush=True)
                 try:
                     #checkout flectra
                     flc = FlectraClient(data[i]["cfg"]["username"], data[i]["cfg"]["password"])
                     res = flc.attendance_checkout()
                 except:
-                    print("Warning: unable to checkout!")
-                debug(data[i])
+                    logging.warning("Warning: unable to checkout!")
+                logging.debug(data[i])
                 del data[i]
         time.sleep(0.02)
     except (SystemExit):
-        print("exiting")
+        logging.info("exiting")
         scanner.sendCmd("stopscan",ack=True)
         scanner.close()
         sys.exit(0)

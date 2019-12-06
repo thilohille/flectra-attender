@@ -10,6 +10,8 @@ extern "C" {
 Cipher * cipher = new Cipher();
 base64 b;
 
+int LEDPIN = LED_BUILTIN;
+
 int channelload [15];
 int sortedkeys [64];
 String maclist[64][4];
@@ -115,7 +117,7 @@ void setup() {
   }
   /* start Serial */
   Serial.begin(115200);
-
+  pinMode (LEDPIN, OUTPUT);
   /* setup wifi */
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   esp_wifi_init(&cfg);
@@ -137,6 +139,10 @@ void setup() {
 
 }
 
+int statusled = 0;
+int statusledblink = 1;
+unsigned long lasttimestamp = millis();
+
 size_t outputLength;
 String serialdata;
 //===== LOOP =====//
@@ -149,29 +155,90 @@ void loop() {
   esp_wifi_set_channel(curChannel, WIFI_SECOND_CHAN_NONE);
   int firstmac = sortedkeys[0];
   //listcount = 0;
+  if (statusledblink == 1){
+    statusled = (statusled + 1) % 2;
+    digitalWrite(LEDPIN,statusled);
+  }
   if (flagsenddata){
-    delay(1000);
+    int datasend = 0;
     for (int i = 0; i < listcount; i++) { // checks if the MAC address has been added before
       if (maclist[i][0].length() > 0) {
         Serial.println("{\"c\":" + String(i) + ",\"m\":\"" + maclist[i][0] + "\",\"r\":" + maclist[i][3] + "}");
+        datasend = 1;
       }
     }
+    int flickerdelay = 100 + (listcount * 5);
+    listcount = 0;
+    if (datasend == 1){
+      digitalWrite(LEDPIN,LOW);
+      delay(flickerdelay);
+      digitalWrite(LEDPIN,HIGH);
+      delay(flickerdelay);
+      digitalWrite(LEDPIN,statusled);
+    }
+    lasttimestamp = vardelay(1000,lasttimestamp);
   }
   else{
       delay(100);
+      listcount = 0;
   }
-  listcount = 0;
   curChannel++;
   if (Serial.available()) {
     String cmd = Serial.readStringUntil(0);
     String value = Serial.readStringUntil(0);
     if (cmd == "startscan") {
       flagsenddata = true;
-      Serial.println("ACK-startscan");
+      statusledblink = 0;
+      statusled = HIGH;
+      digitalWrite(LEDPIN,statusled);
+      Serial.println("ACK-" + cmd);
     }
     else if (cmd == "stopscan"){
       flagsenddata = false;
-      Serial.println("ACK-stopscan");
+      statusledblink = 1;
+      statusled = LOW;
+      digitalWrite(LEDPIN,statusled);
+      Serial.println("ACK-" + cmd);
+    }
+    else if (cmd == "ledon"){
+      statusled = HIGH;
+      digitalWrite(LEDPIN,statusled);
+      statusledblink = 0;
+      Serial.println("ACK-" + cmd);
+    }
+    else if (cmd == "ledoff"){
+      statusledblink = 0;
+      statusled = LOW;
+      digitalWrite(LEDPIN,statusled);
+      Serial.println("ACK-" + cmd);
+    }
+    else if (cmd == "checkin"){
+      digitalWrite(LEDPIN,LOW);
+      delay(100);
+      digitalWrite(LEDPIN,HIGH);
+      delay(100);
+      digitalWrite(LEDPIN,LOW);
+      delay(100);
+      digitalWrite(LEDPIN,HIGH);
+      delay(100);
+      digitalWrite(LEDPIN,statusled);
+      Serial.println("ACK-" + cmd);
+    }
+    else if (cmd == "checkout"){
+      digitalWrite(LEDPIN,LOW);
+      delay(200);
+      digitalWrite(LEDPIN,HIGH);
+      delay(200);
+      digitalWrite(LEDPIN,statusled);
+      Serial.println("ACK-" + cmd);
+    }
+    else if (cmd == "ledblinkon"){
+      statusledblink = 1;
+      Serial.println("ACK-" + cmd);
+    }
+    else if (cmd == "ledblinkoff"){
+      statusledblink = 0;
+      Serial.println("ACK-" + cmd);
     }
     else if (cmd == "encrypt") {
       String encrypted = b.encode(cipher->encryptString(value));
@@ -192,5 +259,14 @@ void loop() {
       //free(decodebuffer);
     }
   }
+}
+
+unsigned long vardelay(int targetdelay, unsigned long delay_lasttimestamp){
+  unsigned long mssincelascall =  millis() - delay_lasttimestamp;  
+  if (mssincelascall < targetdelay){
+    int actualdelay = targetdelay - mssincelascall;
+    delay(actualdelay);
+  }
+  return millis();
 }
 
