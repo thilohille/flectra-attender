@@ -45,7 +45,8 @@ class WifiScanner:
         line = line.rstrip('\0')
         if (line[:22] == "Guru Meditation Error:"):
             raise WifiScannerCrash(line[23:])
-        logging.debug("read: "+line.rstrip('\0'))
+        if len(line) > 0:
+            logging.debug("read: "+line.rstrip('\0'))
         logging.debug("read done")
         return line
         
