@@ -10,7 +10,7 @@ extern "C" {
 Cipher * cipher = new Cipher();
 base64 b;
 
-int LEDPIN = LED_BUILTIN;
+uint8_t LEDA = A12;
 
 int channelload [15];
 int sortedkeys [64];
@@ -117,7 +117,9 @@ void setup() {
   }
   /* start Serial */
   Serial.begin(115200);
-  pinMode (LEDPIN, OUTPUT);
+  ledcAttachPin(LEDA, 1);
+  ledcSetup(1, 12000, 8);
+  ledcWrite(1, 255);
   /* setup wifi */
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   esp_wifi_init(&cfg);
@@ -142,6 +144,10 @@ void setup() {
 int statusled = 0;
 int statusledblink = 1;
 unsigned long lasttimestamp = millis();
+float ledbeat = 0;
+float ledbeatstep = 0.0003;
+double ledbeatfactor = 120;
+int ledbeatlevel = 255;
 
 size_t outputLength;
 String serialdata;
@@ -153,11 +159,12 @@ void loop() {
   }
   channelload[curChannel] = channelload[curChannel] / 2;
   esp_wifi_set_channel(curChannel, WIFI_SECOND_CHAN_NONE);
+
   int firstmac = sortedkeys[0];
   //listcount = 0;
   if (statusledblink == 1){
     statusled = (statusled + 1) % 2;
-    digitalWrite(LEDPIN,statusled);
+    ledcWrite(1, statusled * ledbeatlevel);  
   }
   if (flagsenddata){
     int datasend = 0;
@@ -167,15 +174,8 @@ void loop() {
         datasend = 1;
       }
     }
-    int flickerdelay = 100 + (listcount * 5);
+    int flickerdelay = 5;
     listcount = 0;
-    if (datasend == 1){
-      digitalWrite(LEDPIN,LOW);
-      delay(flickerdelay);
-      digitalWrite(LEDPIN,HIGH);
-      delay(flickerdelay);
-      digitalWrite(LEDPIN,statusled);
-    }
     lasttimestamp = vardelay(1000,lasttimestamp);
   }
   else{
@@ -190,46 +190,46 @@ void loop() {
       flagsenddata = true;
       statusledblink = 0;
       statusled = HIGH;
-      digitalWrite(LEDPIN,statusled);
+      ledcWrite(1, statusled * ledbeatlevel);  
       Serial.println("ACK-" + cmd);
     }
     else if (cmd == "stopscan"){
       flagsenddata = false;
       statusledblink = 1;
       statusled = LOW;
-      digitalWrite(LEDPIN,statusled);
+      ledcWrite(1, statusled * ledbeatlevel);  
       Serial.println("ACK-" + cmd);
     }
     else if (cmd == "ledon"){
       statusled = HIGH;
-      digitalWrite(LEDPIN,statusled);
+      ledcWrite(1, statusled * ledbeatlevel);  
       statusledblink = 0;
       Serial.println("ACK-" + cmd);
     }
     else if (cmd == "ledoff"){
       statusledblink = 0;
       statusled = LOW;
-      digitalWrite(LEDPIN,statusled);
+      ledcWrite(1, statusled * ledbeatlevel);  
       Serial.println("ACK-" + cmd);
     }
     else if (cmd == "checkin"){
-      digitalWrite(LEDPIN,LOW);
-      delay(100);
-      digitalWrite(LEDPIN,HIGH);
-      delay(100);
-      digitalWrite(LEDPIN,LOW);
-      delay(100);
-      digitalWrite(LEDPIN,HIGH);
-      delay(100);
-      digitalWrite(LEDPIN,statusled);
+      for (int c=0; c<=2; c++){
+        for (int f = 0; f< 256; f+=10){
+          ledcWrite(1, f);  
+          delay(10);
+        }
+      }
+      ledcWrite(1, statusled * ledbeatlevel);  
       Serial.println("ACK-" + cmd);
     }
     else if (cmd == "checkout"){
-      digitalWrite(LEDPIN,LOW);
-      delay(200);
-      digitalWrite(LEDPIN,HIGH);
-      delay(200);
-      digitalWrite(LEDPIN,statusled);
+      for (int c=0; c<=2; c++){
+        for (int f = 255; f> 0; f-=10){
+          ledcWrite(1, f);  
+          delay(10);
+        }
+      }
+      ledcWrite(1, statusled * ledbeatlevel);  
       Serial.println("ACK-" + cmd);
     }
     else if (cmd == "ledblinkon"){
@@ -261,11 +261,19 @@ void loop() {
   }
 }
 
+
 unsigned long vardelay(int targetdelay, unsigned long delay_lasttimestamp){
   unsigned long mssincelascall =  millis() - delay_lasttimestamp;  
-  if (mssincelascall < targetdelay){
-    int actualdelay = targetdelay - mssincelascall;
-    delay(actualdelay);
+  while (mssincelascall < targetdelay){
+    mssincelascall =  millis() - delay_lasttimestamp;
+    //int actualdelay = targetdelay - mssincelascall;
+    ledbeat = ledbeat + ledbeatstep;
+    if (ledbeat > 180){
+      ledbeat = 0;
+    }
+    ledbeatlevel = 255 - (statusled * (ledbeatfactor + (ledbeatfactor * sin(degrees(ledbeat)))));
+    ledcWrite(1, statusled * ledbeatlevel);
+    delay(10);
   }
   return millis();
 }
