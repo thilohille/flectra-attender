@@ -13,10 +13,8 @@ import logging
 DEBUG = True
 
 if DEBUG:
-    #logging.basicConfig( level=logging.DEBUG, filename='flectra-attender.log')
     logging.basicConfig( level=logging.DEBUG)    
 else:
-    #logging.basicConfig( level=logging.INFO, filename='flectra-attender.log')
     logging.basicConfig( level=logging.INFO)    
 
 with open('config.json') as json_data_file:
@@ -49,7 +47,7 @@ try:
                 cfg["user"][i]["active"] = True
                 logging.debug(i + ": " + cfg["user"][i]["password"])
             except (UnicodeDecodeError):
-                logging.debug(i + ": could not decrypt password, removing user: " + cfg["user"][i]["username"])
+                logging.warning(i + ": could not decrypt password, removing user: " + cfg["user"][i]["username"])
                 cfg["user"][i]["active"] = False
                 
         try:

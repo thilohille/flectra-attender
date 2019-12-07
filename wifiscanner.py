@@ -4,14 +4,6 @@ from time import sleep
 import serial
 import logging
 
-DEBUG = False
-
-if DEBUG:
-    #logging.basicConfig( level=logging.DEBUG, filename='flectra-attender.log')
-    logging.basicConfig( level=logging.DEBUG)    
-else:
-    #logging.basicConfig( level=logging.INFO, filename='flectra-attender.log')
-    logging.basicConfig( level=logging.INFO)    
 
 #Raise exception on exit
 def signal_handler(sig, frame):
