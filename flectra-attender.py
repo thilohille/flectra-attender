@@ -10,7 +10,7 @@ from shutil import copyfile
 from wifiscanner import WifiScanner,WifiScannerCrash
 import logging
 
-DEBUG = True
+DEBUG = False
 
 if DEBUG:
     logging.basicConfig( level=logging.DEBUG)    
@@ -88,7 +88,7 @@ if (flag_config_changed):
 #handle shutdown
 logging.info("starting wifi-scanner") 
 scanner.sendCmd("startscan",ack=True)
-logging.info("now scanniing....") 
+logging.info("now scanning....") 
 
 while True:
     try:
@@ -96,7 +96,7 @@ while True:
         if len(line) == 0:
             time.sleep(0.2)
             continue
-        logging.debug(line)
+        #logging.info(line)
         try:
             obj = json.loads(line)
             #do we have a known mac-address?
@@ -109,12 +109,13 @@ while True:
                     data[obj['m']] = {'lasttimestamp' : time.time(), "cfg" : cfg["user"][obj['m']]}
                     mydata = data[obj['m']]
                     #checkin flectra
-                    print(obj['m'] + ": checkin user " + data[obj['m']]["cfg"]["username"], flush=True)
+                    logging.info(obj['m'] + ": checkin user " + data[obj['m']]["cfg"]["username"])
                     try:
                         flc = FlectraClient(data[obj['m']]["cfg"]["username"], data[obj['m']]["cfg"]["password"])
                         res = flc.attendance_checkin()
                     except:
                         logging.warning("Warning: unable to checkin!")
+                data[obj['m']]["lasttimestamp"] = time.time()
                 obj['time'] = time.asctime( time.localtime(time.time()) )
                 logging.debug(data[obj['m']])
             else:
@@ -129,7 +130,7 @@ while True:
             #user expired?
             if (time.time()-data[i]['lasttimestamp'] > data[i]["cfg"]["checkout-trigger-seconds"]):
                 scanner.sendCmd("checkout",ack=True)
-                logging.info(i + ": checkout user " + data[i]["cfg"]["username"], flush=True)
+                logging.info(i + ": checkout user " + data[i]["cfg"]["username"])
                 try:
                     #checkout flectra
                     flc = FlectraClient(data[i]["cfg"]["username"], data[i]["cfg"]["password"])
@@ -138,6 +139,10 @@ while True:
                     logging.warning("Warning: unable to checkout!")
                 logging.debug(data[i])
                 del data[i]
+            else:
+                if (data[i].get("lastlogged",data[i]["lasttimestamp"]) != data[i]["lasttimestamp"]):
+                    logging.info(i + ": user " + data[i]["cfg"]["username"] + " is still around, awaytime: " + str(int(time.time()-data[i]['lastlogged'])) + " seconds")
+                data[i]["lastlogged"] = data[i]["lasttimestamp"]
         time.sleep(0.02)
     except (SystemExit):
         logging.info("exiting")
