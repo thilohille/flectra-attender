@@ -25,16 +25,16 @@ def loadconfig(scanner, cfg, config_file):
                 b = cfg["user"][i]["password"]
             except:
                 if len(cfg["user"][i]["password-encrypted"].strip()) % 4 != 0:
-                    logging.warning(i + ": encrypted password is not base64, removing user: " + cfg["user"][i]["username"])
+                    logging.warning("%s: encrypted password is not base64, removing user: %s"%(i,cfg["user"][i]["username"]))
                     cfg["user"][i]["active"] = False
                     continue
                 scanner.sendCmd("decrypt",[cfg["user"][i]["password-encrypted"]])
                 try:
                     cfg["user"][i]["password"] = scanner.read()
                     cfg["user"][i]["active"] = True
-                    logging.debug(i + ": " + cfg["user"][i]["password"])
+                    logging.debug("%s: %s"%(i,cfg["user"][i]["password"]))
                 except (UnicodeDecodeError):
-                    logging.warning(i + ": could not decrypt password, removing user: " + cfg["user"][i]["username"])
+                    logging.warning("%s: could not decrypt password, removing user: %s"%(i,cfg["user"][i]["username"]))
                     cfg["user"][i]["active"] = False
                     
             try:
@@ -43,7 +43,7 @@ def loadconfig(scanner, cfg, config_file):
                 scanner.sendCmd("encrypt",[cfg["user"][i]["password"]])
                 cfg["user"][i]["password-encrypted"] = scanner.read()
                 cfg["user"][i]["active"] = True
-                logging.debug(i + ": " + cfg["user"][i]["password-encrypted"])
+                logging.debug("%s: %s"%(i,cfg["user"][i]["password-encrypted"]))
                 cfgsave["user"][i]["password-encrypted"] = cfg["user"][i]["password-encrypted"]
                 del(cfgsave["user"][i]["password"])
                 flag_config_changed = True
@@ -97,10 +97,10 @@ def scan(scanner, cfg, data):
                         mydata = data[obj['m']]
                     except:
                         scanner.sendCmd("checkin",ack=True)
-                        data[obj['m']] = {'lasttimestamp' : time.time(), "cfg" : cfg["user"][obj['m']]}
+                        data[obj['m']] = {'firsttimestamp' : time.time(),'lasttimestamp' : time.time(), "cfg" : cfg["user"][obj['m']]}
                         mydata = data[obj['m']]
                         #checkin flectra
-                        logging.info(obj['m'] + ": checkin user " + data[obj['m']]["cfg"]["username"])
+                        logging.info("%s: checkin user %s, checkouttimer: %i sec"%(obj['m'], data[obj['m']]["cfg"]["username"], data[obj['m']]["cfg"]["checkout-trigger-seconds"]))
                         try:
                             flc = FlectraClient(data[obj['m']]["cfg"]["username"], data[obj['m']]["cfg"]["password"])
                             res = flc.attendance_checkin()
@@ -110,10 +110,10 @@ def scan(scanner, cfg, data):
                     obj['time'] = time.asctime( time.localtime(time.time()) )
                     logging.debug(data[obj['m']])
                 else:
-                    #print("ignored mac " + obj['m'])
+                    #print("ignored mac %s"%(obj['m']))
                     pass
             except json.decoder.JSONDecodeError:
-                logging.warning("jsonerrror: " + line)
+                logging.warning("jsonerrror: %s"%(line))
                 pass
             except:
                 raise
@@ -121,7 +121,7 @@ def scan(scanner, cfg, data):
                 #user expired?
                 if (time.time()-data[i]['lasttimestamp'] > data[i]["cfg"]["checkout-trigger-seconds"]):
                     scanner.sendCmd("checkout",ack=True)
-                    logging.info(i + ": checkout user " + data[i]["cfg"]["username"])
+                    logging.info("%s: checkout user %s, checkouttimer %i sec, checkin was %i sec ago"%(i, data[i]["cfg"]["username"],data[i]["cfg"]["checkout-trigger-seconds"],int(time.time()-data[i]['firsttimestamp'])))
                     try:
                         #checkout flectra
                         flc = FlectraClient(data[i]["cfg"]["username"], data[i]["cfg"]["password"])
@@ -132,7 +132,7 @@ def scan(scanner, cfg, data):
                     del data[i]
                 else:
                     if (data[i].get("lastlogged",data[i]["lasttimestamp"]) != data[i]["lasttimestamp"]):
-                        logging.info(i + ": user " + data[i]["cfg"]["username"] + " is still around, awaytime: " + str(int(time.time()-data[i]['lastlogged'])) + " seconds")
+                        logging.info("%s: user %s checked in already: %i sec, checkouttimer %i sec, checkin was %i sec ago"%(i, data[i]["cfg"]["username"],int(time.time()-data[i]['lastlogged']),data[i]["cfg"]["checkout-trigger-seconds"],int(time.time()-data[i]['firsttimestamp'])))
                     data[i]["lastlogged"] = data[i]["lasttimestamp"]
             time.sleep(0.02)
         except (SystemExit):
