@@ -74,21 +74,40 @@ void sniffer(void* buf, wifi_promiscuous_pkt_type_t type) { //This is where pack
   WifiMgmtHdr *wh = (WifiMgmtHdr*)p->payload;
   len -= sizeof(WifiMgmtHdr);
 
+  /*printf("ADDR1=%02x:%02x:%02x:%02x:%02x:%02x,"
+    " ADDR2=%02x:%02x:%02x:%02x:%02x:%02x,"
+    " ADDR3=%02x:%02x:%02x:%02x:%02x:%02x\n",
+
+    hdr->addr1[0],hdr->addr1[1],hdr->addr1[2],
+    hdr->addr1[3],hdr->addr1[4],hdr->addr1[5],
+
+    hdr->addr2[0],hdr->addr2[1],hdr->addr2[2],
+    hdr->addr2[3],hdr->addr2[4],hdr->addr2[5],
+
+    hdr->addr3[0],hdr->addr3[1],hdr->addr3[2],
+    hdr->addr3[3],hdr->addr3[4],hdr->addr3[5]
+  );*/
+  char macchar[20]; 
+  snprintf(macchar, 20, "%02x:%02x:%02x:%02x:%02x:%02x",
+    hdr->addr2[0],hdr->addr2[1],hdr->addr2[2],
+    hdr->addr2[3],hdr->addr2[4],hdr->addr2[5]
+  );
+  String mac = String(macchar);
   String packet;
   //String fullpacket;
-  String mac;
   int fctl = ntohs(wh->fctl);
   for (int i = 8; i <= 8 + 6 + 1; i++) { // This reads the first couple of bytes of the packet. This is where you can read the whole packet replaceing the "8+6+1" with "p->rx_ctrl.sig_len"
     packet += String(p->payload[i], HEX);
   }
+  /*String mac;
   for (int i = 4; i <= 15; i++) { // This removes the 'nibble' bits from the stat and end of the data we want. So we only get the mac address.
     mac += String(packet[i]);
   }
+  */
   channelload[p->rx_ctrl.channel - 1] += 1;
   signed int rssi = p->rx_ctrl.rssi;
   //Serial.println(fullpacket);
   mac.toUpperCase();
-
   int newmac = 1;
   for (int i = 0; i < listcount; i++) { // checks if the MAC address has been added before
     if (mac == maclist[i][0]) {
@@ -148,7 +167,7 @@ int statusledblink = 1;
 unsigned long lasttimestamp = millis();
 float ledbeat = 0;
 float ledbeatstep = 0.0003;
-double ledbeatfactor = 80;
+double ledbeatfactor = 90;
 int ledbeatlevel = 255;
 
 size_t outputLength;
